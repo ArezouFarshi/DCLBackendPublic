@@ -24,6 +24,10 @@ public class PaymentMilestoneReachedEventDTO : IEventDTO
 
 class Program
 {
+    // ← NEW: track state for snapshots
+    static int latestMilestone = 0;
+    static ConcurrentBag<string> visibleWindows = new ConcurrentBag<string>();
+
     static ConcurrentBag<WebSocket> clients = new ConcurrentBag<WebSocket>();
 
     static async Task StartWebSocketServer()
@@ -42,8 +46,22 @@ class Program
             if (context.Request.IsWebSocketRequest)
             {
                 var wsContext = await context.AcceptWebSocketAsync(null);
+                var socket = wsContext.WebSocket;
                 Console.WriteLine("🌐 Unity client connected.");
-                clients.Add(wsContext.WebSocket);
+
+                // ← NEW: immediately send the current snapshot
+                var snapshot = new
+                {
+                    type = "snapshot",
+                    currentMilestone = latestMilestone,
+                    windowsVisible = visibleWindows.ToArray()
+                };
+                var snapMsg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(snapshot));
+                await socket.SendAsync(new ArraySegment<byte>(snapMsg),
+                                      WebSocketMessageType.Text, true, CancellationToken.None);
+
+                // now add to clients for live updates
+                clients.Add(socket);
             }
             else if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/api/test")
             {
@@ -95,14 +113,25 @@ class Program
 
                     Console.WriteLine($"[Blockchain] Milestone: {percentage}% for {windowName}");
 
-                    var json = JsonSerializer.Serialize(new { paymentPercentage = percentage, windowName = windowName });
+                    // ← NEW: update our “latest” + visible list
+                    latestMilestone = Math.Max(latestMilestone, percentage);
+                    if (!visibleWindows.Contains(windowName))
+                        visibleWindows.Add(windowName);
+
+                    var json = JsonSerializer.Serialize(new
+                    {
+                        type = "update",
+                        paymentPercentage = percentage,
+                        windowName = windowName
+                    });
                     var message = Encoding.UTF8.GetBytes(json);
 
                     foreach (var socket in clients)
                     {
                         if (socket.State == WebSocketState.Open)
                         {
-                            await socket.SendAsync(new ArraySegment<byte>(message), WebSocketMessageType.Text, true, CancellationToken.None);
+                            await socket.SendAsync(new ArraySegment<byte>(message),
+                                                   WebSocketMessageType.Text, true, CancellationToken.None);
                         }
                     }
                 }
