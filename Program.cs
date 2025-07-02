@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Nethereum.Web3;
@@ -24,10 +25,8 @@ public class PaymentMilestoneReachedEventDTO : IEventDTO
 
 class Program
 {
-    // ← NEW: track state for snapshots
     static int latestMilestone = 0;
     static ConcurrentBag<string> visibleWindows = new ConcurrentBag<string>();
-
     static ConcurrentBag<WebSocket> clients = new ConcurrentBag<WebSocket>();
 
     static async Task StartWebSocketServer()
@@ -49,7 +48,6 @@ class Program
                 var socket = wsContext.WebSocket;
                 Console.WriteLine("🌐 Unity client connected.");
 
-                // ← NEW: immediately send the current snapshot
                 var snapshot = new
                 {
                     type = "snapshot",
@@ -60,13 +58,28 @@ class Program
                 await socket.SendAsync(new ArraySegment<byte>(snapMsg),
                                       WebSocketMessageType.Text, true, CancellationToken.None);
 
-                // now add to clients for live updates
                 clients.Add(socket);
             }
             else if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/api/test")
             {
                 var response = JsonSerializer.Serialize(new { status = "success", timestamp = DateTime.UtcNow });
                 var message = Encoding.UTF8.GetBytes(response);
+                context.Response.ContentType = "application/json";
+                context.Response.ContentLength64 = message.Length;
+                await context.Response.OutputStream.WriteAsync(message, 0, message.Length);
+                context.Response.OutputStream.Close();
+            }
+            else if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/api/visibility")
+            {
+                var visibility = new Dictionary<string, bool>
+                {
+                    { "1stStoryWindows", visibleWindows.Contains("1stStoryWindows") },
+                    { "2ndStoryWindows", visibleWindows.Contains("2ndStoryWindows") },
+                    { "3rdStoryWindows", visibleWindows.Contains("3rdStoryWindows") },
+                    { "4thStoryWindows", visibleWindows.Contains("4thStoryWindows") }
+                };
+
+                var message = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(visibility));
                 context.Response.ContentType = "application/json";
                 context.Response.ContentLength64 = message.Length;
                 await context.Response.OutputStream.WriteAsync(message, 0, message.Length);
@@ -113,7 +126,6 @@ class Program
 
                     Console.WriteLine($"[Blockchain] Milestone: {percentage}% for {windowName}");
 
-                    // ← NEW: update our “latest” + visible list
                     latestMilestone = Math.Max(latestMilestone, percentage);
                     if (!visibleWindows.Contains(windowName))
                         visibleWindows.Add(windowName);
