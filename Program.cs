@@ -98,7 +98,7 @@ class Program
 
     static async Task StartBlockchainListener()
     {
-        var web3 = new Web3("https://sepolia.infura.io/v3/6ad85a144d0445a3b181add73f6a55d9");
+        var web3 = new Web3("https://sepolia.infura.io/v3/51bc36040f314e85bf103ff18c570993");
         var contractAddress = "0x1758D22614D4797c7428762E45ffd31b2CE6b4A0";
         var eventHandler = web3.Eth.GetEvent<PaymentMilestoneReachedEventDTO>(contractAddress);
 
