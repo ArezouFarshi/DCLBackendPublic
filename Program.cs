@@ -62,6 +62,10 @@ class Program
             }
             else if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/api/test")
             {
+                // --- CORS FIX FOR /api/test ---
+                context.Response.AddHeader("Access-Control-Allow-Origin", "*");
+                // ------------------------------
+
                 var response = JsonSerializer.Serialize(new { status = "success", timestamp = DateTime.UtcNow });
                 var message = Encoding.UTF8.GetBytes(response);
                 context.Response.ContentType = "application/json";
@@ -71,6 +75,10 @@ class Program
             }
             else if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/api/visibility")
             {
+                // --- CORS FIX FOR /api/visibility ---
+                context.Response.AddHeader("Access-Control-Allow-Origin", "*");
+                // ------------------------------------
+
                 var visibility = new Dictionary<string, bool>
                 {
                     { "1stStoryWindows", visibleWindows.Contains("1stStoryWindows") },
